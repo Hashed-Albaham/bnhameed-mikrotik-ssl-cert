@@ -1,0 +1,56 @@
+name: Renew MikroTik SSL (Dynu - binhamid Combined)
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'  # تشغيل تلقائي أول كل شهر
+  workflow_dispatch:      # تشغيل يدوي عند الحاجة
+
+permissions:
+  contents: write
+
+env:
+  DOMAIN1: binhamid.giize.com
+  DOMAIN2: '*.binhamid.giize.com'
+  DOMAIN3: binhamid-stastus.giize.com
+  DOMAIN4: '*.binhamid-stastus.giize.com'
+
+jobs:
+  renew-cert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install acme.sh
+        run: |
+          curl https://get.acme.sh | sh -s email=yo0il@gmail.com
+          
+      - name: Issue Certificate (Dynu)
+        env:
+          Dynu_ClientId: ${{ secrets.DYNU_CLIENT_ID }}
+          Dynu_Secret: ${{ secrets.DYNU_SECRET }}
+        run: |
+          # طلب الشهادة الموحدة من Let's Encrypt مع النطاقات الشاملة
+          ~/.acme.sh/acme.sh --issue \
+            -d ${{ env.DOMAIN1 }} --dns dns_dynu \
+            -d "${{ env.DOMAIN2 }}" --dns dns_dynu \
+            -d ${{ env.DOMAIN3 }} --dns dns_dynu \
+            -d "${{ env.DOMAIN4 }}" --dns dns_dynu \
+            --server letsencrypt
+
+      - name: Save All Certs to Folder
+        run: |
+          mkdir -p certs
+          # تصدير الشهادات بأسماء الملفات التي طلبتها في مجلد certs
+          ~/.acme.sh/acme.sh --install-cert -d ${{ env.DOMAIN1 }} \
+            --cert-file ./certs/cert.pem \
+            --key-file ./certs/key.pem \
+            --fullchain-file ./certs/fullchain.pem
+          
+      - name: Commit and Push to GitHub
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add certs/
+          git commit -m "Update All SSL Certificates for binhamid domains" || echo "No changes to commit"
+          git push
